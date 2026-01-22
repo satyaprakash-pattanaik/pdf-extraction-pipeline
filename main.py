@@ -1,6 +1,5 @@
 import sys
 import os
-import time
 import traceback
 
 from utils.tasks_repository import (
@@ -13,6 +12,7 @@ from utils.tasks_repository import (
     mark_task_completed,
     mark_task_failed,
 )
+from pipeline import process_pdf_extraction
 
 # ---------------------------------
 # ENTRY
@@ -51,11 +51,12 @@ def main():
             return
 
         # ---------------------------------
-        # PROCESS TASKS (DUMMY)
+        # PROCESS TASKS
         # ---------------------------------
         for task in tasks:
             task_id = task["id"]
             file_name = task["fileName"]
+            demand_file_id = task["demandFileId"]
 
             try:
                 print(f"📄 Processing task {task_id} ({file_name})")
@@ -63,16 +64,26 @@ def main():
                 mark_task_in_progress(task_id, pid)
 
                 # -----------------------------
-                # DUMMY PROCESSING
+                # PDF EXTRACTION PIPELINE
                 # -----------------------------
-                time.sleep(2)  # simulate work
+                result = process_pdf_extraction(demand_file_id)
 
-                mark_task_completed(task_id)
+                if result['success']:
+                    print(f"  ✅ Extracted {result['pages_extracted']} pages")
+                    print(f"  ✅ Created {len(result['files_created'])} files")
+                    print(f"  ✅ Output directory: {result['base_path']}")
+
+                    mark_task_completed(task_id, str(result['base_path']), result['pages_extracted'])
+                else:
+                    mark_task_failed(task_id, "PDF extraction failed")
+                    continue
+
                 print(f"✅ Completed task {task_id}")
 
             except Exception as task_error:
                 print(f"❌ Task failed: {task_id}")
                 print(task_error)
+                print(traceback.format_exc())
 
                 mark_task_failed(task_id, str(task_error))
 

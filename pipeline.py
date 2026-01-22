@@ -88,6 +88,6 @@ def process_pdf_extraction(demand_file_id: str) -> dict:
     return {
         'success': True,
         'base_path': base_path,
-        'pages_extracted': num_pages,
+        'pages_extracted': num_pages,   
         'files_created': files_created
     }

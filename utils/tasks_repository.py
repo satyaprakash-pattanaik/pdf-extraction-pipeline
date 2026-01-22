@@ -107,18 +107,19 @@ def mark_task_in_progress(task_id: str, pid: int):
         conn.commit()
 
 
-def mark_task_completed(task_id: str):
+def mark_task_completed(task_id: str, output_directory: str, num_pages: int):
     query = """
         UPDATE "Task"
         SET "status" = 'completed',
             "outputSummary" = %s,
+            "outputFilePath" = %s,
             "endTs" = NOW(),
             "updatedAt" = NOW()
         WHERE "id" = %s
     """
 
     with db_connect() as conn, conn.cursor() as cur:
-        cur.execute(query, (DUMMY_TASK_SUMMARY, task_id))
+        cur.execute(query, (DUMMY_TASK_SUMMARY, output_directory, task_id))
         conn.commit()
 
 
