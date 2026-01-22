@@ -1,0 +1,35 @@
+{
+  "logo_path": null,
+  "demand_creation_date": "2026-01-22",
+
+  "insurance_name": "ABC Insurance Company",
+  "claim_number": "CLM-2024-001234",
+  "insurance_address": "123 Insurance Street\nNew York, NY 10001",
+  "insurance_telephone": "(212) 555-1234",
+  "insurance_fax": "(212) 555-5678",
+
+  "accident_type": "Motor Vehicle Accident",
+
+  "client_name": "John Michael Johnson",
+  "client_last_name": "Johnson",
+  "date_of_loss": "2025-06-15",
+  "defendant_name": "James Robert Smith",
+  "defendant_adjuster": "Sarah Adams",
+  "title": "Esq.",
+
+  "incident_summary": "On June 15, 2025, at approximately 2:30 PM, Plaintiff John Michael Johnson was lawfully operating his vehicle when he was struck by a vehicle operated by James Robert Smith at the intersection of Main Street and Fifth Avenue. The defendant failed to obey a red traffic signal, causing a violent collision. As a result of this incident, Plaintiff sustained serious bodily injuries requiring immediate emergency medical treatment.",
+  "incident_image_path": null,
+
+  "medical_records": [
+    {
+      "summary": "June 15, 2025 – Emergency Room Visit: Plaintiff presented to the emergency department with severe pain and visible trauma. Diagnostic imaging revealed a comminuted fracture of the left femur. Emergency orthopedic surgery was performed the same day.",
+      "image_reference": "Emergency Department X-Ray – Left Femur",
+      "image_path": null
+    },
+    {
+      "summary": "June 20, 2025 – Post-Operative Follow-Up: Plaintiff returned for follow-up evaluation. Imaging confirmed proper placement of orthopedic hardware. Physical therapy was initiated with ongoing pain management.",
+      "image_reference": "Post-Operative X-Ray – Femur ORIF",
+      "image_path": null
+    }
+  ]
+}
