@@ -28,13 +28,14 @@ def get_output_base_path(demand_file_id: str) -> Path:
         ValueError: If demand_file_id is not found in database
     """
     # Query database for job_id, file_name, and outputFilePath
-    # Get job_id from Task, file_name from Task or DemandFile
+    # Get job_id from Job, file_name from Task or DemandFile
     query = """
-        SELECT 
-            t."jobId",
+        SELECT
+            j."id" as "jobId",
             COALESCE(t."fileName", df."fileName") as "fileName",
             t."outputFilePath"
         FROM "DemandFile" df
+        JOIN "Job" j ON j."demandNoteId" = df."demandNoteId"
         LEFT JOIN "Task" t ON t."demandFileId" = df."id"
         WHERE df."id" = %s
         LIMIT 1
