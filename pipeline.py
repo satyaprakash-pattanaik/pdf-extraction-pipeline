@@ -18,7 +18,7 @@ from utils.directory_manager import (
     create_subdirectories,
     save_text_to_file,
 )
-
+  
 
 def process_pdf_extraction(demand_file_id: str) -> dict:
     """

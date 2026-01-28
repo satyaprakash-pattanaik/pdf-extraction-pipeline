@@ -3,12 +3,14 @@ PDF Extraction Module
 
 Purpose:
 Extract text content from PDF files page by page.
+(Generic, adaptive, works for N PDFs)
 """
 
 from typing import List
 import fitz  # PyMuPDF
 from pathlib import Path
 import os
+import re
 
 from utils.connect_db import db_connect
 
@@ -16,19 +18,7 @@ from utils.connect_db import db_connect
 def fetch_pdf_from_database(demand_file_id: str) -> bytes:
     """
     Fetch PDF file content from database using stored file path.
-
-    Args:
-        demand_file_id: DemandFile ID
-
-    Returns:
-        PDF file content as bytes
-
-    Raises:
-        FileNotFoundError: If the file path doesn't exist
-        ValueError: If demand_file_id is not found in database
     """
-    # Query database for file path from DemandFile table
-    # Prefer DemandFile.filePath, fall back to Task.filePath if DemandFile.filePath is null
     query = """
         SELECT 
             COALESCE(df."filePath", t."filePath") as "filePath"
@@ -46,101 +36,47 @@ def fetch_pdf_from_database(demand_file_id: str) -> bytes:
             raise ValueError(f"DemandFile with id {demand_file_id} not found")
 
         file_path = result["filePath"]
-        
+
         if not file_path:
             raise ValueError(f"File path not found for DemandFile {demand_file_id}")
 
-    # Resolve PDF file path
-    # Handle both absolute (Unix-style) and relative paths
     pdf_path = None
     attempted_paths = []
-    
-    # Strategy 1: Try path as-is (works for absolute Windows paths and existing files)
+
     test_path = Path(file_path)
     attempted_paths.append(str(test_path))
     if test_path.exists():
         pdf_path = test_path
-    
-    # Strategy 2: Check environment variable for base uploads directory
+
     if pdf_path is None:
-        uploads_base = os.getenv('UPLOADS_BASE_DIR') or os.getenv('FILE_STORAGE_PATH')
+        uploads_base = os.getenv("UPLOADS_BASE_DIR") or os.getenv("FILE_STORAGE_PATH")
         if uploads_base:
-            if file_path.startswith('/'):
-                relative_path = file_path.lstrip('/')
-            else:
-                relative_path = file_path
+            relative_path = file_path.lstrip("/") if file_path.startswith("/") else file_path
             test_path = Path(uploads_base) / relative_path
             attempted_paths.append(str(test_path))
             if test_path.exists():
                 pdf_path = test_path
-    
-    # Strategy 3: If path starts with '/' (Unix absolute) on Windows, resolve relative to various bases
-    if pdf_path is None and file_path.startswith('/'):
-        relative_path = file_path.lstrip('/')
-        
-        # Try relative to current working directory
-        test_path = Path(relative_path)
-        attempted_paths.append(str(test_path))
-        if test_path.exists():
-            pdf_path = test_path
-        
-        # Try relative to CWD
-        if pdf_path is None:
-            cwd = Path.cwd()
-            test_path = cwd / relative_path
+
+    if pdf_path is None and file_path.startswith("/"):
+        relative_path = file_path.lstrip("/")
+        cwd = Path.cwd()
+
+        for level in range(4):
+            base = cwd
+            for _ in range(level):
+                base = base.parent
+            test_path = base / relative_path
             attempted_paths.append(str(test_path))
             if test_path.exists():
                 pdf_path = test_path
-        
-        # Try parent directories (go up to 3 levels)
-        if pdf_path is None:
-            current = Path.cwd()
-            for level in range(4):  # 0, 1, 2, 3 levels up
-                base = current
-                for _ in range(level):
-                    base = base.parent
-                test_path = base / relative_path
-                attempted_paths.append(str(test_path))
-                if test_path.exists():
-                    pdf_path = test_path
-                    break
-        
-        # Try common sibling directories (if CWD is in a subdirectory)
-        if pdf_path is None:
-            cwd = Path.cwd()
-            # Check if we're in a subdirectory and try parent/../uploads
-            if 'legasys-dev' in str(cwd) or 'legasys' in str(cwd):
-                # Try going up and looking for uploads
-                for level in range(1, 4):
-                    base = cwd
-                    for _ in range(level):
-                        base = base.parent
-                    # Try base/uploads/...
-                    test_path = base / relative_path
-                    attempted_paths.append(str(test_path))
-                    if test_path.exists():
-                        pdf_path = test_path
-                        break
-                    # Try base/../uploads/...
-                    test_path = base.parent / relative_path
-                    attempted_paths.append(str(test_path))
-                    if test_path.exists():
-                        pdf_path = test_path
-                        break
-    
-    # If file still not found, raise error with helpful information
+                break
+
     if pdf_path is None or not pdf_path.exists():
-        error_msg = (
-            f"PDF file not found. Attempted {len(attempted_paths)} paths:\n"
-        )
-        for i, path_str in enumerate(attempted_paths[:10], 1):  # Show first 10
+        error_msg = f"PDF file not found. Attempted {len(attempted_paths)} paths:\n"
+        for i, path_str in enumerate(attempted_paths[:10], 1):
             error_msg += f"  {i}. {path_str}\n"
-        if len(attempted_paths) > 10:
-            error_msg += f"  ... and {len(attempted_paths) - 10} more paths\n"
         error_msg += f"\nOriginal path from DB: {file_path}\n"
         error_msg += f"Current working directory: {os.getcwd()}\n"
-        error_msg += f"\nTip: Set UPLOADS_BASE_DIR environment variable to the base directory containing 'uploads' folder."
-        
         raise FileNotFoundError(error_msg)
 
     with open(pdf_path, "rb") as f:
@@ -149,25 +85,48 @@ def fetch_pdf_from_database(demand_file_id: str) -> bytes:
 
 def extract_text_by_page(pdf_content: bytes) -> List[str]:
     """
-    Extract text from PDF content page by page.
-
-    Args:
-        pdf_content: PDF file content as bytes
-
-    Returns:
-        List of extracted page texts (1 element per page)
+    Generic adaptive text extractor.
+    Works across digital, hybrid, and noisy PDFs.
     """
     page_texts = []
-
-    # Open PDF from bytes
     pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
 
     try:
-        # Extract text from each page
-        for page_num in range(len(pdf_document)):
-            page = pdf_document[page_num]
-            text = page.get_text()
-            page_texts.append(text)
+        for page_index in range(len(pdf_document)):
+            page = pdf_document[page_index]
+
+            raw_text = page.get_text().strip()
+
+            # Decide extraction path per page
+            use_blocks = True
+
+            if _text_density_is_low(raw_text):
+                use_blocks = True
+
+            blocks = page.get_text("blocks") if use_blocks else [(0, 0, 0, 0, raw_text)]
+
+            # Stable reading order
+            blocks = sorted(blocks, key=lambda b: (b[1], b[0]))
+
+            page_lines = []
+
+            for block in blocks:
+                text = block[4]
+                if not text:
+                    continue
+
+                cleaned = _generic_clean(text)
+
+                if not cleaned:
+                    continue
+
+                if _looks_like_garbage(cleaned):
+                    continue
+
+                page_lines.append(cleaned)
+
+            page_texts.append("\n".join(page_lines))
+
     finally:
         pdf_document.close()
 
@@ -177,15 +136,81 @@ def extract_text_by_page(pdf_content: bytes) -> List[str]:
 def format_page_text(page_num: int, text: str) -> str:
     """
     Format page text with page markers.
-
-    Args:
-        page_num: Page number (1-indexed)
-        text: Extracted text from page
-
-    Returns:
-        Formatted page text with markers
     """
     formatted = f"=== PAGE {page_num} START ===\n"
     formatted += text
     formatted += f"\n=== PAGE {page_num} END ===\n"
     return formatted
+
+
+# ==================================================
+# Internal generic utilities (document-agnostic)
+# ==================================================
+
+def _text_density_is_low(text: str) -> bool:
+    """
+    Detect image-heavy / scanned pages.
+    """
+    if not text:
+        return True
+    alpha_chars = sum(c.isalpha() for c in text)
+    return alpha_chars < 50
+
+
+def _generic_clean(text: str) -> str:
+    """
+    Conservative cleanup safe for all PDFs.
+    """
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    text = _normalize_characters(text)
+    text = _fix_spacing_patterns(text)
+
+    return text.strip()
+
+
+def _normalize_characters(text: str) -> str:
+    """
+    Fix high-confidence character confusions only.
+    """
+    # | misread as I
+    text = re.sub(r"\b\|\b", "I", text)
+
+    # Date-like correction (8/H → 0)
+    text = re.sub(r"\b[8H](\d/\d{2}/\d{2,4})\b", r"0\1", text)
+
+    return text
+
+
+def _fix_spacing_patterns(text: str) -> str:
+    """
+    Generic spacing fixes without word assumptions.
+    """
+    # lowercaseUppercase → lowercase Uppercase
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+
+    # worddigit → word digit
+    text = re.sub(r"([a-zA-Z])(\d)", r"\1 \2", text)
+    text = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", text)
+
+    return text
+
+
+def _looks_like_garbage(text: str) -> bool:
+    """
+    Language-agnostic logo / noise detection.
+    """
+    if len(text) < 5:
+        return False
+
+    alpha_ratio = sum(c.isalpha() for c in text) / len(text)
+    vowel_ratio = sum(c.lower() in "aeiou" for c in text) / len(text)
+
+    if alpha_ratio < 0.4:
+        return True
+
+    if vowel_ratio < 0.2 and len(text) > 12:
+        return True
+
+    return False

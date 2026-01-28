@@ -1,15 +1,14 @@
-# TODO: Update DB with output directory, num pages, and completion timestamp for tasks and jobs
+# TODO: Update Code to Match New Database Schema
 
-## Steps to Complete
+## Tasks to Complete
+- [ ] Update utils/tasks_repository.py:
+  - [ ] In mark_job_completed: Remove "outputSummary" field, keep only status and updateTs.
+  - [ ] In mark_job_failed: Remove "outputSummary" field, keep only status and updateTs.
+  - [ ] In mark_task_completed: Change "outputSummary" to "summaryStatus", keep "endTs" and "updatedAt".
+  - [ ] In mark_task_failed: Change "outputSummary" to "summaryStatus", keep "endTs" and "updatedAt".
+- [ ] Update main.py: Add import time and time.sleep(5) after mark_task_in_progress to allow UI to show status updates.
+- [ ] Test the changes to ensure compatibility with the new schema.
 
-1. **Update `mark_task_completed` in `utils/tasks_repository.py`**:
-   - ✅ Modified the function to accept `output_directory` and `num_pages` parameters.
-   - ✅ Updated the SQL query to set `outputFilePath` to `output_directory`.
-
-2. **Update `main.py`**:
-   - ✅ Modified the call to `mark_task_completed` to pass `result['base_path']` as `output_directory` and `result['pages_extracted']` as `num_pages`.
-   - ✅ Added logic after processing all tasks to check if all tasks have status 'completed'. If yes, mark job completed; otherwise, mark job failed.
-
-3. **Test the changes**:
-   - Run the pipeline to ensure DB updates correctly.
-   - Verify that outputFilePath is updated for tasks, and job status is set based on task statuses.
+## Notes
+- For DemandFile, update summaryStatus if needed, but no current functions exist in the code.
+- Ensure all status fields are updated correctly as per schema defaults.
