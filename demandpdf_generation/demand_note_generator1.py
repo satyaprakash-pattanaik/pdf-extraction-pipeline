@@ -1,16 +1,13 @@
 """
-Demand Note Generator (JSON-based)
----------------------------------
+Demand Note Generator (Pure python-docx)
+---------------------------------------
 Professional legal demand letter generator (DOCX)
-
-Implements requirements 1–10 exactly
-Uses python-docx with precise spacing control
+Matches law-firm litigation templates
 """
 
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
 
 from docx import Document
 from docx.shared import Inches, Pt
@@ -23,7 +20,7 @@ from docx.oxml.ns import qn
 # JSON LOADER
 # =====================================================
 
-def load_metadata_from_json(json_path: str) -> Dict[str, Any]:
+def load_metadata(json_path: str) -> dict:
     path = Path(json_path)
     if not path.exists():
         raise FileNotFoundError(f"Metadata JSON not found: {path}")
@@ -31,12 +28,23 @@ def load_metadata_from_json(json_path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    for key in ["demand_creation_date", "date_of_loss"]:
-        if key in data and isinstance(data[key], str):
+    for key in ["demand_creation_date", "date_of_accident"]:
+        if isinstance(data.get(key), str):
             try:
                 data[key] = datetime.fromisoformat(data[key])
             except ValueError:
                 pass
+
+    data["claim_number"] = data.get("client_claim_number")
+    data["date_of_loss"] = data.get("date_of_accident")
+    data["defendant_adjuster"] = data.get("defendant_adjuster_name")
+
+    if isinstance(data.get("client_name"), list):
+        data["client_display_name"] = ", ".join(data["client_name"])
+        data["client_last_name"] = data["client_name"][0].split()[-1]
+    else:
+        data["client_display_name"] = data.get("client_name", "")
+        data["client_last_name"] = data["client_display_name"].split()[-1]
 
     return data
 
@@ -46,36 +54,34 @@ def load_metadata_from_json(json_path: str) -> Dict[str, Any]:
 # =====================================================
 
 class DemandNoteGenerator:
-    FONT_NAME = "Franklin Gothic Book"
-    FONT_SIZE = 12
+    FONT = "Franklin Gothic Book"
+    SIZE = 12
 
     def __init__(self):
-        self.doc = None
+        self.doc = Document()
+        style = self.doc.styles["Normal"]
+        style.font.name = self.FONT
+        style.font.size = Pt(self.SIZE)
 
     # -------------------------------------------------
-    # Utilities (Helper Tools)
+    # Helpers
     # -------------------------------------------------
 
     def _set_font(self, run, size=None, bold=False, underline=False):
-        run.font.name = self.FONT_NAME
-        run.font.size = Pt(size or self.FONT_SIZE)
+        run.font.name = self.FONT
+        run.font.size = Pt(size or self.SIZE)
         run.font.bold = bold
         run.font.underline = underline
 
-    def _keep_with_next(self, paragraph):
-        pPr = paragraph._element.get_or_add_pPr()
-        pPr.append(OxmlElement("w:keepLines"))
-        pPr.append(OxmlElement("w:keepNext"))
-
-    def _tight_paragraph(self, paragraph, before=0, after=0):
-        pPr = paragraph._element.get_or_add_pPr()
+    def _spacing(self, p, before=0, after=0):
+        pPr = p._element.get_or_add_pPr()
         spacing = OxmlElement("w:spacing")
         spacing.set(qn("w:before"), str(before))
         spacing.set(qn("w:after"), str(after))
         pPr.append(spacing)
 
-    def _add_border(self, paragraph):
-        pPr = paragraph._element.get_or_add_pPr()
+    def _add_border(self, p):
+        pPr = p._element.get_or_add_pPr()
         pBdr = OxmlElement("w:pBdr")
         for side in ["top", "left", "bottom", "right"]:
             el = OxmlElement(f"w:{side}")
@@ -86,63 +92,32 @@ class DemandNoteGenerator:
         pPr.append(pBdr)
 
     # -------------------------------------------------
-    # Document Builder
+    # Sections
     # -------------------------------------------------
 
-    def create_demand_note(self, m: Dict[str, Any], output_path: str) -> str:
-        self.doc = Document()
-
-        style = self.doc.styles["Normal"]
-        style.font.name = self.FONT_NAME
-        style.font.size = Pt(self.FONT_SIZE)
-
-        self._add_logo_and_date(m)
-        self._add_insurance_block(m)
-        self._add_title(m)
-        self._add_client_info(m)
-        self._add_settlement_notice()
-        self._add_salutation(m)
-        self._add_incident(m)
-        self._add_medical_summary(m)
-        self._add_compensation(m)
-
-        self.doc.save(output_path)
-        return output_path
-
- 
-
-    def _add_logo_and_date(self, m):
-        logo = m.get("logo_path")
-        if logo and Path(logo).exists():
+    def add_logo_and_date(self, m):
+        if m.get("logo_path") and Path(m["logo_path"]).exists():
             p = self.doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.add_run().add_picture(logo, width=Inches(2))
-            self._tight_paragraph(p, after=40)
-            self._keep_with_next(p)
+            p.add_run().add_picture(m["logo_path"], width=Inches(2))
+            self._spacing(p, after=60)
 
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        date_text = (
-            m["demand_creation_date"].strftime("%B %d, %Y")
-            if isinstance(m.get("demand_creation_date"), datetime)
-            else m.get("demand_creation_date", "")
-        )
-        r = p.add_run(date_text)
+        r = p.add_run(m["demand_creation_date"].strftime("%B %d, %Y"))
         self._set_font(r, size=14, bold=True, underline=True)
-        self._tight_paragraph(p, after=80)
-        self._keep_with_next(p)
+        self._spacing(p, after=80)
 
-    def _add_insurance_block(self, m):
+    def add_insurance_block(self, m):
         table = self.doc.add_table(rows=1, cols=2)
-        table.autofit = False
-
         left = table.rows[0].cells[0].paragraphs[0]
+
         for line in [
             m.get("insurance_name"),
-            f"Attn: {m.get('claim_number')}" if m.get("claim_number") else None,
-            m.get("insurance_address"),
-            f"Tel: {m.get('insurance_telephone')}" if m.get("insurance_telephone") else None,
-            f"Fax: {m.get('insurance_fax')}" if m.get("insurance_fax") else None,
+            f"Attn: {m.get('claim_number')}",
+            m.get("insurance_company_address"),
+            f"Tel: {m.get('insurance_telephone')}",
+            f"Fax: {m.get('insurance_fax')}",
         ]:
             if line:
                 r = left.add_run(line + "\n")
@@ -153,40 +128,31 @@ class DemandNoteGenerator:
         r = right.add_run("Sent Via Certified U.S. Mail\nFacsimile")
         self._set_font(r)
 
-        self._keep_with_next(left)
-
-    def _add_title(self, m):
+    def add_title(self, m):
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         r = p.add_run(f"*** {m.get('accident_type','ACCIDENT').upper()} POLICY LIMIT DEMAND ***")
         self._set_font(r, size=18, bold=True, underline=True)
-        self._tight_paragraph(p, before=80, after=80)
-        self._keep_with_next(p)
+        self._spacing(p, before=80, after=80)
 
-    def _add_client_info(self, m):
+    def add_client_info(self, m):
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        fields = [
-            ("Client", m.get("client_name")),
-            ("Date of Loss",
-             m["date_of_loss"].strftime("%m/%d/%Y")
-             if isinstance(m.get("date_of_loss"), datetime)
-             else m.get("date_of_loss")),
+        for label, value in [
+            ("Client", m["client_display_name"]),
+            ("Date of Loss", m["date_of_loss"].strftime("%m/%d/%Y")),
             ("Your Insured", m.get("defendant_name")),
             ("Claim #", m.get("claim_number")),
             ("Adjuster", m.get("defendant_adjuster")),
-        ]
-
-        for label, value in fields:
+        ]:
             if value:
                 r = p.add_run(f"{label}: {value}\n")
                 self._set_font(r)
 
-        self._tight_paragraph(p, after=80)
-        self._keep_with_next(p)
+        self._spacing(p, after=80)
 
-    def _add_settlement_notice(self):
+    def add_settlement_notice(self):
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         r = p.add_run(
@@ -197,100 +163,75 @@ class DemandNoteGenerator:
             "OR REDISTRIBUTED FOR ANY PURPOSE."
         )
         self._set_font(r, bold=True, underline=True)
-        self._tight_paragraph(p, before=80, after=80)
-        self._keep_with_next(p)
+        self._spacing(p, before=80, after=80)
 
-    def _add_salutation(self, m):
+    def add_salutation_and_intro(self, m):
         p = self.doc.add_paragraph()
-        r = p.add_run("To Whom It May Concern:")
-        self._set_font(r)
-        self._tight_paragraph(p, after=20)
+        self._set_font(p.add_run("To Whom It May Concern:"))
+        self._spacing(p, after=20)
 
         intro = self.doc.add_paragraph()
+        intro.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
-        r1 = intro.add_run("This office represents ")
-        self._set_font(r1)
-
-        display = f"{m.get('title','')} {m.get('client_name')}"
-        short = f"{m.get('title','')} {m.get('client_last_name')}"
-
-        r2 = intro.add_run(f"{display} (“{short}”)")
-        self._set_font(r2, bold=True)
-
-        r3 = intro.add_run(
-            " in the above-referenced incident involving your insured. "
-            "We hereby extend this formal offer of settlement as set forth herein."
+        self._set_font(intro.add_run("This office represents "))
+        self._set_font(
+            intro.add_run(
+                f"{m.get('title','')} {m['client_display_name']} "
+                f"(“{m.get('title','')} {m['client_last_name']}”)"
+            ),
+            bold=True
         )
-        self._set_font(r3)
+        self._set_font(
+            intro.add_run(
+                " in the above-referenced incident involving your insured. "
+                "We hereby extend this formal offer of settlement as set forth herein."
+            )
+        )
+        self._spacing(intro, after=80)
 
-    def _add_incident(self, m):
+    def add_incident_and_medical(self, m):
         head = self.doc.add_paragraph()
         head.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = head.add_run("THE INCIDENT")
-        self._set_font(r, size=16, bold=True, underline=True)
-        self._tight_paragraph(head, before=80, after=40)
-        self._keep_with_next(head)
+        self._set_font(head.add_run("THE INCIDENT"), size=16, bold=True, underline=True)
+        self._spacing(head, before=80, after=40)
 
-        if m.get("incident_summary"):
-            p = self.doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            r = p.add_run(m["incident_summary"])
-            self._set_font(r)
+        p = self.doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        self._set_font(p.add_run(m.get("incident_summary", "")))
+        self._spacing(p, after=60)
 
-    # =====================================================
-    # MEDICAL SUMMARY
-    # =====================================================
-
-    def _add_medical_summary(self, m):
-        records = m.get("medical_records")
-        if not records:
+        if not m.get("medical_records"):
             return
 
-    # 🔴 FORCE PAGE 2 START
-        self.doc.add_page_break()
-
         head = self.doc.add_paragraph()
         head.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = head.add_run("SUMMARY OF MEDICAL CARE & INJURIES")
-        self._set_font(r, size=16, bold=True, underline=True)
-        self._tight_paragraph(head, before=80, after=80)
+        self._set_font(head.add_run("SUMMARY OF MEDICAL CARE & INJURIES"), size=16, bold=True, underline=True)
+        self._spacing(head, after=60)
 
-        for rec in records:
+        for rec in m["medical_records"]:
             if rec.get("summary"):
                 p = self.doc.add_paragraph()
                 p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                r = p.add_run(rec["summary"])
-                self._set_font(r)
-                self._tight_paragraph(p, after=60)
+                self._set_font(p.add_run(rec["summary"]))
+                self._spacing(p, after=60)
 
             if rec.get("image_path") and Path(rec["image_path"]).exists():
-                label = self.doc.add_paragraph()
-                r = label.add_run(rec.get("image_reference", "IMAGE"))
-                self._set_font(r, bold=True)
-                self._tight_paragraph(label, after=20)
+                img = self.doc.add_paragraph()
+                img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                img.add_run().add_picture(rec["image_path"], width=Inches(4.5))
+                self._add_border(img)
+                self._spacing(img, after=80)
 
-                img_p = self.doc.add_paragraph()
-                img_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                img_p.add_run().add_picture(rec["image_path"], width=Inches(4.5))
-                self._add_border(img_p)
-                self._tight_paragraph(img_p, after=80)
-
-
-    # =====================================================
-    # CLAIM FOR COMPENSATION (NEW PAGE)
-    # =====================================================
-
-    def _add_compensation(self, m):
+    def add_compensation(self, m):
         self.doc.add_page_break()
 
         title = m.get("title", "")
-        last = m.get("client_last_name", "")
+        last = m["client_last_name"]
 
         head = self.doc.add_paragraph()
         head.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = head.add_run("CLAIM FOR COMPENSATION")
-        self._set_font(r, size=16, bold=True, underline=True)
-        self._tight_paragraph(head, after=120)
+        self._set_font(head.add_run("CLAIM FOR COMPENSATION"), size=16, bold=True, underline=True)
+        self._spacing(head, after=80)
 
         self._left_para(
             f"{title}. {last} is entitled to full and fair compensation for losses incurred "
@@ -324,9 +265,8 @@ class DemandNoteGenerator:
 
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = p.add_run("CACI 3905A")
-        self._set_font(r, size=16, bold=True)
-        self._tight_paragraph(p, after=80)
+        self._set_font(p.add_run("CACI 3905A"), size=16, bold=True)
+        self._spacing(p, after=80)
 
         self._center_para(
             f"{title}. {last} is also entitled to recover for all past and future noneconomic "
@@ -337,29 +277,38 @@ class DemandNoteGenerator:
         )
 
     # -------------------------------------------------
-    # Helpers for compensation
-    # -------------------------------------------------
 
     def _left_para(self, text):
         p = self.doc.add_paragraph()
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        r = p.add_run(text)
-        self._set_font(r)
-        self._tight_paragraph(p, after=80)
+        self._set_font(p.add_run(text))
+        self._spacing(p, after=80)
 
     def _center_para(self, text):
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = p.add_run(text)
-        self._set_font(r)
-        self._tight_paragraph(p, after=80)
+        self._set_font(p.add_run(text))
+        self._spacing(p, after=80)
 
     def _center_underline(self, text):
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = p.add_run(text)
-        self._set_font(r, underline=True)
-        self._tight_paragraph(p, after=80)
+        self._set_font(p.add_run(text), underline=True)
+        self._spacing(p, after=80)
+
+    # -------------------------------------------------
+
+    def generate(self, m, output):
+        self.add_logo_and_date(m)
+        self.add_insurance_block(m)
+        self.add_title(m)
+        self.add_client_info(m)
+        self.add_settlement_notice()
+        self.add_salutation_and_intro(m)
+        self.add_incident_and_medical(m)
+        self.add_compensation(m)
+
+        self.doc.save(output)
+        return output
 
 
 # =====================================================
@@ -367,12 +316,11 @@ class DemandNoteGenerator:
 # =====================================================
 
 if __name__ == "__main__":
-    metadata = load_metadata_from_json("demand_metadata.json")
+    metadata = load_metadata(
+        r"C:\Users\hp\Documents\pdf-extraction-pipeline\demandpdf_generation\Demand_metadata1.json"
+    )
 
     generator = DemandNoteGenerator()
-    output = generator.create_demand_note(
-        metadata,
-        "demand_note_sample.docx"
-    )
+    output = generator.generate(metadata, "demand_note.docx")
 
     print(f"✅ Demand note created: {output}")

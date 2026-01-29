@@ -1,0 +1,39 @@
+{
+  "demand_creation_date": "2025-01-29",
+  "insurance_name": "State Farm Insurance",
+  "client_claim_number": "CLM-2025-12345",
+  "insurance_company_address": "1234 Insurance Boulevard, Los Angeles, CA 90001",
+  "insurance_telephone": "(800) 555-1234",
+  "insurance_fax": "(800) 555-1235",
+  "accident_type": "MOTOR VEHICLE ACCIDENT",
+  "client_name": ["Sarah Johnson", "Michael Johnson"],
+  "date_of_accident": "2024-12-15",
+  "defendant_name": "Robert Williams",
+  "defendant_adjuster_name": "Jennifer Martinez",
+  "title": "Ms",
+  "incident_summary": "On December 15, 2024, at approximately 3:45 PM, our client, Ms. Sarah Johnson, was lawfully operating her 2020 Honda Accord southbound on Main Street in Los Angeles, California. At the intersection of Main Street and 5th Avenue, the defendant, Robert Williams, who was operating a 2018 Ford F-150, failed to yield the right of way while making a left turn. The defendant's vehicle struck our client's vehicle on the driver's side door, causing significant damage and injuries. The collision was witnessed by multiple parties and documented by the responding police officer in Case Number 2024-LA-98765. The police report clearly indicates that the defendant was cited for failure to yield and was determined to be at fault for the collision.",
+  "logo_path": "BF logo.jpg",
+  "incident_image_path": "",
+  "medical_records": [
+    {
+      "summary": "December 15, 2024 - Emergency Room Visit (St. Mary's Hospital): Immediately following the accident, Ms. Johnson was transported by ambulance to St. Mary's Hospital Emergency Room. Upon examination, she complained of severe neck pain, lower back pain, and headaches. The attending physician diagnosed her with cervical strain, lumbar strain, and post-traumatic headaches. X-rays were taken to rule out fractures. She was prescribed pain medication and muscle relaxants and was advised to follow up with her primary care physician within 48 hours.",
+      "image_path": "",
+      "image_reference": ""
+    },
+    {
+      "summary": "December 18, 2024 - Primary Care Physician Visit (Dr. Robert Chen, MD): Ms. Johnson presented with continuing complaints of neck and back pain, headaches, and difficulty sleeping. Physical examination revealed restricted range of motion in the cervical and lumbar spine, muscle spasms, and tenderness upon palpation. Dr. Chen prescribed additional pain medication, referred her to physical therapy, and ordered an MRI of the cervical and lumbar spine to evaluate for possible disc injuries.",
+      "image_path": "",
+      "image_reference": ""
+    },
+    {
+      "summary": "January 5, 2025 - MRI Results and Orthopedic Consultation (Dr. Amanda Foster, Orthopedic Specialist): MRI results revealed a herniated disc at C5-C6 and bulging discs at L4-L5 and L5-S1. Dr. Foster diagnosed Ms. Johnson with post-traumatic cervical disc herniation and lumbar disc bulges. She recommended a course of conservative treatment including continued physical therapy, pain management, and epidural steroid injections. Dr. Foster noted that if conservative treatment fails, surgical intervention may be necessary.",
+      "image_path": "",
+      "image_reference": ""
+    },
+    {
+      "summary": "January 10, 2025 through Present - Physical Therapy (Advanced Physical Therapy Center): Ms. Johnson has been attending physical therapy three times per week. Treatment includes therapeutic exercises, manual therapy, electrical stimulation, and heat/cold therapy. Her physical therapist reports that while she has made some progress, she continues to experience significant pain and functional limitations. The therapist anticipates she will require ongoing treatment for at least 3-6 additional months.",
+      "image_path": "",
+      "image_reference": ""
+    }
+  ]
+}
